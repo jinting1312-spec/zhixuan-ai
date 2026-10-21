@@ -2,17 +2,27 @@
 
 同花顺 02 题「自然语言智能选股与策略解释器」的可运行 MVP。Next.js App Router、TypeScript、Tailwind CSS、Zod；同一项目内包含服务端数据接口、确定性筛选和单页工作台。
 
+产品：[https://zhixuan-stock-ai.netlify.app/](https://zhixuan-stock-ai.netlify.app/) · 源码：[jinting1312-spec/zhixuan-ai](https://github.com/jinting1312-spec/zhixuan-ai)。交付摘要见 [SUBMISSION.md](SUBMISSION.md)。
+
 ## 启动
 
-正式项目根目录为 `F:\Personal Profile Organization\02Work\2.8Project\zhixuan`。不要进入 `preparation/`，该目录仅为只读历史测试参考。
+需要 Node.js 22+ 和 npm。新机器在任意工作目录克隆仓库，进入包含 `package.json` 的仓库根目录：
 
-```powershell
-Set-Location -LiteralPath 'F:\Personal Profile Organization\02Work\2.8Project\zhixuan'
-npm install
+```sh
+git clone https://github.com/jinting1312-spec/zhixuan-ai.git
+cd zhixuan-ai
+npm ci
+```
+
+参照根目录 `.env.example` 新建 `.env.local`，填入下表的服务端配置；示例不含真实密钥，需要自行配置。已有 `.env.local` 不应覆盖。然后启动：
+
+```sh
 npm run dev
 ```
 
-访问终端显示的本地地址，默认 http://127.0.0.1:3000。需要 Node.js 22+。新环境可参照 `.env.example` 创建 `.env.local`；已有 `.env.local` 不应覆盖或复制。启动与构建脚本会通过 `scripts/runtime-env.mjs` 关闭 Next.js 可选遥测，避免本机 Windows 用户配置写入的 `EXDEV` 错误，不修改环境文件。
+访问终端显示的本地地址，默认 http://127.0.0.1:3000。生产模式使用 `npm run build` 后执行 `npm start`。启动与构建脚本会通过 `scripts/runtime-env.mjs` 关闭 Next.js 可选遥测，避免开发时遇到的 Windows 用户配置写入 `EXDEV` 错误，不修改环境文件。
+
+原开发机器的正式根目录为 `F:\Personal Profile Organization\02Work\2.8Project\zhixuan`，此路径不是运行要求。所有命令都在项目根目录执行；`preparation/` 仅为本机历史测试参考，不随源码交付。
 
 | 服务端变量 | 用途 |
 | --- | --- |
@@ -33,7 +43,7 @@ npm run dev
 
 完成一次筛选后，修改阈值会出现「基于上次数据快照的条件变化预览」，显示调整前/后预计入选数、差异和新增/退出入选股票。预览只调用现有确定性规则引擎判断已取得的指标，不请求扶摇或 DeepSeek、不重算底层金融指标。两组条件与快照对应的筛选时间分别展示；下方正式统计、列表与逐股解释仍保留上次已执行结果。无快照时不生成预览，非法或未填完整的条件暂停预览，恢复原条件后隐藏预览，重新执行成功后以新的正式结果为准。
 
-当前线上地址：[知选 AI](https://zhixuan-stock-ai.netlify.app/)。已由用户完成首版线上核心功能人工验收，GitHub `main` 推送后由 Netlify 自动部署。
+当前线上地址：[知选 AI](https://zhixuan-stock-ai.netlify.app/)。用户已完成首版线上核心功能人工验收，并反馈包含条件变化预览的最新版本已部署。本轮材料整理重新验证本地测试和构建，未补做线上人工验收。
 
 ## 数据与计算口径
 
