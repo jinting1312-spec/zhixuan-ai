@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { DEFAULT_CONDITIONS, SCOPE, conditionsSchema, conflicts, type Conditions, type ScreenResult, type ParseResult, type StockResult, type Metric } from '@/lib/contracts';
+import { previewConditions } from '@/lib/preview';
 
 type IconName = 'grid' | 'spark' | 'arrow' | 'save' | 'chevron' | 'check' | 'info' | 'clock';
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -30,6 +31,7 @@ const fields: { key: keyof Conditions; label: string; unit: string }[] = [
   { key: 'peMax', label: 'PE 上限', unit: '倍' }, { key: 'volatilityMax', label: '波动率上限', unit: '%' },
 ];
 const initial = Object.fromEntries(Object.entries(DEFAULT_CONDITIONS).map(([key, value]) => [key, String(value)])) as Record<keyof Conditions, string>;
+const conditionSummary = (c: Conditions) => `A > ${c.growthMin}% · B > ${c.peMin} 且 < ${c.peMax} 倍 · C < ${c.volatilityMax}%`;
 
 function Evidence({ metric }: { metric: Metric }) {
   return <dl className="evidence">
@@ -80,6 +82,7 @@ export default function Workbench() {
   const conditions = Object.fromEntries(fields.map(f => [f.key, values[f.key].trim() === '' ? NaN : Number(values[f.key])])) as Conditions;
   const issues = conflicts(conditions);
   const changed = result && JSON.stringify(result.conditions) !== JSON.stringify(conditions);
+  const preview = previewConditions(result, conditions);
   const counts = result ? {
     selected: result.stocks.filter(s => s.status === 'selected').length,
     excluded: result.stocks.filter(s => s.status === 'excluded').length,
@@ -158,20 +161,33 @@ export default function Workbench() {
                 <div className="condition-block"><div className="condition-title"><span className="condition-letter">B</span><div><h4>合理估值</h4><p>正值 PE_TTM · 严格开区间</p></div><span className="operator">&lt; &gt;</span></div><div className="range-input">{fields.slice(1, 3).map(f => <div key={f.key}><label htmlFor={f.key}>{f.label}</label><div className="number-input"><input id={f.key} type="number" step="any" value={values[f.key]} onChange={e => setValues({ ...values, [f.key]: e.target.value })}/><span>倍</span></div></div>)}</div></div>
                 <div className="condition-block"><div className="condition-title"><span className="condition-letter">C</span><div><h4>较低波动</h4><p>最近20个日收益率 · 总体标准差</p></div><span className="operator">&lt;</span></div><div className="threshold-row"><label htmlFor="volatilityMax">波动率上限</label><div className="number-input"><input id="volatilityMax" type="number" step="any" value={values.volatilityMax} onChange={e => setValues({ ...values, volatilityMax: e.target.value })}/><span>%</span></div></div></div>
               </fieldset>
-              <div className="assumptions"><div className="flex items-center gap-2"><Icon name="info" size={15}/><h4>{parsed ? '解析依据与默认假设' : '默认假设，等待你确认'}</h4></div>{parsed ? <>{parsedText !== text && <p className="warning-text">输入已改变；下方为上一次解析记录，可重新解析。</p>}<p>以下记录对应上次 AI 输出；后续手动修改以条件卡片为准。</p><ul>{[...parsed.explicit, ...parsed.assumptions].map((a, i) => <li key={i}>{a}</li>)}</ul>{parsed.unsupported.length > 0 && <div className="unsupported"><b>以下需求未执行</b><ul>{parsed.unsupported.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}</> : <p>“增长、合理估值、较低波动”没有唯一数值定义。初始的 0%、0–30 倍、3% 均为演示假设，不代表用户已指定或 AI 已调用。</p>}</div>
               {issues.length > 0 && <div className="conflicts" role="alert"><strong>请先解决条件冲突</strong><ul>{issues.map(issue => <li key={issue}>{issue}</li>)}</ul></div>}
+              {parsed && parsed.unsupported.length > 0 && <div className="unsupported unsupported-notice"><b>以下需求未执行</b><ul>{parsed.unsupported.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}
               <button className="run-button" onClick={run} disabled={!!busy || issues.length > 0}>{busy === 'screen' ? <><span className="spinner"/>获取真实数据 · {elapsed}s</> : <>确认条件并执行筛选<Icon name="arrow"/></>}</button>
               <p className="execution-note">A ∩ B ∩ C · 三项全部满足才入选<br/>数据缺失单独分类，不作为 0 或自动通过。</p>
+              <div className="assumptions"><div className="flex items-center gap-2"><Icon name="info" size={15}/><h4>{parsed ? '解析依据与默认假设' : '默认假设，等待你确认'}</h4></div>{parsed ? <>{parsedText !== text && <p className="warning-text">输入已改变；下方为上一次解析记录，可重新解析。</p>}<p>以下记录对应上次 AI 输出；后续手动修改以条件卡片为准。</p>{parsed.explicit.length > 0 && <ul className="explicit-evidence">{parsed.explicit.map((a, i) => <li key={i}>{a}</li>)}</ul>}{parsed.assumptions.length > 0 && <details className="assumption-defaults"><summary>默认假设 {parsed.assumptions.length} 项 · 展开核对</summary><ul>{parsed.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></details>}</> : <details className="assumption-defaults"><summary>初始阈值为演示默认值 · 展开说明</summary><p>“增长、合理估值、较低波动”没有唯一数值定义。初始的 0%、0–30 倍、3% 均为演示假设，不代表用户已指定或 AI 已调用。</p></details>}</div>
             </div>
           </section>
           <section className="results-column" aria-busy={busy === 'screen'}>
+            {changed && result && <section className="condition-preview panel" aria-labelledby="preview-title" aria-live="polite">
+              <div className="preview-heading"><Icon name="info"/><h3 id="preview-title">基于上次数据快照的条件变化预览</h3><span>尚未执行</span></div>
+              <p className="preview-context">对应上次筛选时间：{time(result.fetchedAt)}（北京时间）。仅复用已有指标，不更新行情或财报，不代表最新实时数据。</p>
+              {preview ? <>
+                <dl className="preview-counts"><div><dt>调整前入选</dt><dd data-preview="before">{preview.beforeCount}<small>只</small></dd></div><div><dt>调整后预计入选</dt><dd data-preview="after">{preview.afterCount}<small>只</small></dd></div><div><dt>数量变化</dt><dd data-preview="delta">{preview.delta > 0 ? '+' : ''}{preview.delta}<small>只</small></dd></div></dl>
+                <div className="preview-rules"><p><b>上次已执行条件</b><span>{conditionSummary(result.conditions)}</span></p><p><b>当前编辑条件</b><span>{conditionSummary(conditions)}</span></p></div>
+                <div className="preview-changes">{([{ key: 'added', title: '预计新增入选', stocks: preview.added }, { key: 'removed', title: '预计退出入选', stocks: preview.removed }] as const).map(group => <div key={group.key} data-preview={group.key}><h4>{group.title}<span>{group.stocks.length} 只</span></h4>{group.stocks.length ? <ul>{group.stocks.map(stock => <li key={stock.thscode}><strong>{stock.name}</strong><code>{stock.thscode}</code><span>{statusText[stock.before]} → {statusText[stock.after]}</span></li>)}</ul> : <p>无</p>}</div>)}</div>
+                {preview.insufficientCount > 0 && <p className="preview-context">仍有 {preview.insufficientCount} 只数据不足，调整阈值不会补齐缺失数据。</p>}
+              </> : <p className="preview-unavailable" role="status">条件存在冲突或数值未填写完整，暂不生成数量预览。请先修正左侧条件。</p>}
+              <p className="preview-footer">下方统计、列表和逐股解释仍对应上次已执行条件；确认后点击“执行筛选”才会更新正式结果。</p>
+            </section>}
+            {result && <p className="executed-label">{changed ? '上次已执行统计 · 尚未应用当前编辑条件' : '已执行筛选统计'}</p>}
             <div className="stats-grid">{(['selected', 'excluded', 'insufficient'] as const).map((key, i) => <div key={key} className={`stat-card stat-${key}`}><div><span>{['满足全部条件', '未满足条件', '待补全数据'][i]}</span><span className="stat-index">0{i + 1}</span></div><p>{counts ? counts[key] : '—'}<small>只</small></p><span className="stat-caption">{['入选样本', '排除样本', '数据不足样本'][i]}</span></div>)}</div>
-            <div className="results-panel panel"><div className="section-title"><h2><span className="step">02</span>样本筛选结果</h2><span className="micro-label">{result ? `${result.stocks.length} STOCKS` : 'WAITING FOR RUN'}</span></div>
+            <div className="results-panel panel"><div className="section-title"><h2><span className="step">02</span>{result ? '上次已执行结果' : '样本筛选结果'}</h2><span className="micro-label">{result ? `${result.stocks.length} STOCKS` : 'WAITING FOR RUN'}</span></div>
               <div className="result-tabs" role="group" aria-label="结果分类">{(['all', 'selected', 'excluded', 'insufficient'] as const).map(key => <button key={key} className={filter === key ? 'active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>{key === 'all' ? '全部样本' : statusText[key]}<span>{counts ? key === 'all' ? result!.stocks.length : counts[key] : '—'}</span></button>)}</div>
               {changed && <div className="stale-banner">条件已修改。下方仍为上次执行结果，请重新执行以更新。</div>}
               {busy === 'screen' && <div className="loading-banner" role="status"><span className="spinner dark"/>正在获取成分股、估值、财务与历史行情，并发上限 3。{result ? '下方保留上次结果。' : '首次获取可能需要一些时间。'}</div>}
               {result ? <>
-                <div className="result-snapshot"><Icon name="clock" size={14}/><span>执行于 {time(result.fetchedAt)}<br/><span className="snapshot-rules">本次条件：A &gt; {result.conditions.growthMin}% · B &gt; {result.conditions.peMin} 且 &lt; {result.conditions.peMax} · C &lt; {result.conditions.volatilityMax}%</span></span></div>
+                <div className="result-snapshot"><Icon name="clock" size={14}/><span>执行于 {time(result.fetchedAt)}<br/><span className="snapshot-rules">已执行条件：{conditionSummary(result.conditions)}</span></span></div>
                 <div className="stock-table"><div className="table-head"><span>股票 / 代码</span><span>净利润同比</span><span>PE_TTM</span><span>20日波动率</span><span>判定</span><span/></div>{visibleStocks.length === 0 ? <div className="no-matches">此分类暂无股票。可查看其他分类或修改阈值后重新执行。</div> : visibleStocks.map(stock => <div key={stock.thscode} className="stock-row-group"><button className={`stock-row ${expanded === stock.thscode ? 'expanded' : ''}`} onClick={() => setExpanded(expanded === stock.thscode ? null : stock.thscode)} aria-expanded={expanded === stock.thscode} aria-controls={`detail-${stock.thscode}`}><span className="stock-name"><strong>{stock.name}</strong><small>{stock.thscode}</small></span><span>{number(stock.growth.value)}{stock.growth.value !== null ? '%' : ''}</span><span>{number(stock.pe.value)}</span><span>{number(stock.volatility.value)}{stock.volatility.value !== null ? '%' : ''}</span><span><span className={`status-badge ${stock.status}`}>{stock.status === 'selected' && <Icon name="check" size={12}/>} {statusText[stock.status]}</span></span><span className="row-chevron"><Icon name="chevron" size={14}/></span></button>{expanded === stock.thscode && <div id={`detail-${stock.thscode}`}><StockDetail stock={stock}/></div>}</div>)}</div>
                 <div className="result-footnote">按成分股接口原始顺序展示，不代表排名。成分股数据时点：{time(result.poolSource.timestamp)}。<br/>估值与行情为各自数据时点，不保证实时；展开股票可查看报告期、原值与计算依据。</div>
               </> : <div className="empty-state"><div className="empty-graphic" aria-hidden="true"><span/><span/><span/><span/><i><Icon name="check" size={22}/></i></div><h3>从一个可验证的想法开始</h3><p>确认左侧条件后，获取 20 只样本的真实数据。<br/>每一个入选与排除，都有对应的数值和依据。</p><div className="empty-steps"><span>01 确认条件</span><Icon name="arrow" size={14}/><span>02 获取数据</span><Icon name="arrow" size={14}/><span>03 查看解释</span></div></div>}
@@ -179,7 +195,7 @@ export default function Workbench() {
             <div className="method-panel"><div><Icon name="info"/><h3>读懂结果，而不只看结果</h3></div><p>财务增长率使用 <b>2025年年报</b>，不是实时最新财报。波动率取前复权收盘价，使用最近 21 个有效交易日生成 20 个日收益率，计算总体标准差，不年化。接口错误、缺失或冲突数据会明确标记。</p><div><span>确定性 TypeScript 计算</span><span>原始字段可追溯</span><span>AI 不参与入选判定</span></div></div>
           </section>
         </div>
-        <footer><span>知选 AI <i/> 把每一个条件说清楚</span><p>本工具用于课程演示与策略研究，不构成投资建议或收益承诺。样本覆盖有限，历史数据不代表未来表现。</p></footer>
+        <footer><span>知选 AI <i/> 把每一个条件说清楚</span><p>本工具用于产品能力验证与策略研究演示，不构成投资建议或收益承诺。样本覆盖有限，历史数据不代表未来表现。</p></footer>
       </main>
     </div>
   </div>;
