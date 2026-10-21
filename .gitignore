@@ -1,0 +1,41 @@
+.env.local
+.env.*
+!.env.example
+preparation/
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+*.log
+.vercel/
+test-results/
+
+# Local environment, credentials and machine-specific configuration
+.env
+*.pem
+*.key
+.npmrc
+.codex/
+.agents/
+.idea/
+.vscode/
+
+# Generated Next.js development files
+/AGENTS.md
+next-env.d.ts
+
+# Temporary files, editor backups and local verification artifacts
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+tmp/
+temp/
+screenshots/
+playwright-report/
+blob-report/
+.DS_Store
+Thumbs.db
